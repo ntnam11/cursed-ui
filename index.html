@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Cursed UI</title>
+</head>
+<body>
+  <div class="fullscreen">
+    <div class="number-label">
+      <p>Enter your phone number</p>
+    </div>
+    <div id="number-placeholder"></div>
+    <div class="flex-container">
+      <button id="button-drop">Click</button>
+    </div>
+  </div>
+  <div id="number-parent" class="fullscreen"></div>
+</body>
+<script type="text/javascript">
+(function() {
+//@ts-check
+  let dropButton = document.getElementById('button-drop');
+  let availableChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+']
+  let createdNumbers = [];
+  let vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0)
+  let vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0)
+  let gravity = .98;
+  let delay = 10;
+  let fontSize = 40;
+  let minVec = 0.1;
+  let negativeMultiplier = 3;
+  let friction = .5;
+  let dragging = false;
+  let dragTarget;
+  let dragNumber;
+  let numberCount = 10;
+  let placeholderSize = 50;
+  let placeholderPosList = [];
+  let offsetX = fontSize / 4;
+  let offsetY = fontSize * 1.2 / 2;
+
+  let root = document.querySelector(':root');
+  root.style.setProperty('--font-size', `${fontSize}px`);
+
+  document.addEventListener('mousemove', (e) => {
+    if (dragging)
+    {
+      dragTarget.style.left = `${e.x - offsetX}px`;
+      dragTarget.style.top = `${e.y - offsetY}px`;
+    }
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    if (dragging)
+    {
+      dragging = false;
+      let dragOnPlaceholder = false;
+      for (let i = 0; i < placeholderPosList.length; i++)
+      {
+        if (
+          e.x >= placeholderPosList[i][0] &&
+          e.x <= placeholderPosList[i][1] &&
+          e.y >= placeholderPosList[i][2] &&
+          e.y <= placeholderPosList[i][3]
+        )
+        {
+          placeholderPosList[i][4].textContent = dragTarget.textContent;
+          dragNumber.remove();
+          dragOnPlaceholder = true;
+        }
+      }
+      if (!dragOnPlaceholder)
+      {
+        moveNumberDiv(dragNumber, e.x, e.y, 0, 0);
+      }
+    }
+  });
+
+  dropButton?.addEventListener('click', (f) => {
+    let createdNumber = createNumberDiv(f.x, f.y);
+    createdNumber.addEventListener('mousedown', (e) => {
+      dragTarget = e.target;
+      dragNumber = createdNumber;
+      dragging = true;
+    });
+    
+    // createdNumber.addEventListener('mouseup', (e) => {
+    //   dragging = false;
+    //   moveDiv(createdNumber, e.x, e.y, 0, 0);
+    // });
+    
+    let left = parseFloat(createdNumber.style.left);
+    let top = parseFloat(createdNumber.style.top);
+    let signX = Math.random() < 0.5 ? -1 : 1;
+    let signY = Math.random() < 0.5 ? -1 : 1;
+    if (signY < 0) signY *= negativeMultiplier;
+    let randomForceX = Math.random() * 10 * signX;
+    let randomForceY = Math.random() * 10 * signY;
+    moveNumberDiv(createdNumber, f.x, f.y, randomForceX, randomForceY);
+  });
+
+  let numberParent = document.getElementById('number-parent');
+  let buttonRect = dropButton?.getBoundingClientRect();
+  
+  function createNumberDiv(x, y) {
+    let newNumberDiv = document.createElement('div');
+    newNumberDiv.setAttribute('class', 'movable');
+    newNumberDiv.setAttribute('id', 'number');
+    let index = Math.floor(Math.random() * availableChars.length);
+    newNumberDiv.textContent = (Math.floor(Math.random() * 10)).toString();
+    numberParent?.appendChild(newNumberDiv);
+    
+    // @ts-ignore
+    newNumberDiv.style.left = `${x}px`;
+    // @ts-ignore
+    newNumberDiv.style.top = `${y}`;
+    
+    return newNumberDiv;
+  }
+  
+  class NumberObject
+  {
+    posX;
+    posY;
+    vecX;
+    vecY;
+    accX;
+    accY;
+    nextPosX;
+    nextPosY;
+
+    constructor() {
+      this.posX = 0;
+      this.posY = 0;
+      this.nextPosX = 0;
+      this.nextPosY = 0;
+      this.vecX = 0;
+      this.vecY = 0;
+      this.accX = 0;
+      this.accY = gravity;
+      this.collided = false;
+    }
+
+    /**
+     * @param {Number} x
+     * @param {Number} y
+     */
+    AddForce(x, y) {
+      this.vecX += x;
+      this.vecY += y;
+    }
+
+    move() {
+      this.vecX += this.accX;
+      this.vecY += this.accY;
+      this.nextPosX = this.posX + this.vecX;
+      this.nextPosY = this.posY + this.vecY;
+      this.posX = this.nextPosX;
+      this.posY = this.nextPosY;
+    }
+
+    /**
+     * @param {Number} x
+     * @param {Number} y
+     */
+    collide(x, y) {
+      this.vecX *= x * friction;
+      this.vecY *= y * friction;
+    }
+  }
+
+  /**
+   * @param {HTMLDivElement} div - The div
+   * @param {Number} left - left
+   * @param {Number} top - top
+   * @param {Number} randomForceX - randomForceX
+   * @param {Number} randomForceY - randomForceY
+   */
+  function moveNumberDiv(div, left, top, randomForceX, randomForceY) {
+    // console.log(`move ${div.getAttribute('id')}`)
+    let obj = new NumberObject();
+    obj.posX = left;
+    obj.posY = top;
+    
+    obj.AddForce(randomForceX, randomForceY);
+    
+    function move() {
+      obj.move();
+      if (obj.posY > vh - fontSize * 1.5)
+      {
+        obj.posY = vh - fontSize * 1.5;
+        obj.collide(1, -1);
+      }
+      if (obj.posY < 0)
+      {
+        obj.collide(1, -1);
+      }
+      if (obj.posX < 0)
+      {
+        obj.posX = 0;
+        obj.collide(-1, 1);
+      }
+      if (obj.posX > vw - fontSize)
+      {
+        obj.posX = vw - fontSize;
+        obj.collide(-1, 1);
+      }
+
+      if (
+        Math.abs(obj.posY - (vh - fontSize * 1.5)) <= minVec &&
+        Math.abs(obj.vecX) <= minVec
+      )
+      {
+        return;
+      }
+
+      div.style.left = `${obj.posX}px`;
+      div.style.top = `${obj.posY}px`;
+
+      // console.log(`move ${div.getAttribute('id')} to ${left}, ${top}`);
+
+      setTimeout(move, delay);
+    }
+
+    move();
+  }
+
+  function createPlaceholders() {
+    let placeholderParent = document.getElementById('number-placeholder');
+
+    for (let i = 0; i < numberCount; i++)
+    {
+      let numberPlaceholder = document.createElement('div');
+      numberPlaceholder.setAttribute('class', 'number-input');
+      let numberPlaceholderInner = document.createElement('div');
+      numberPlaceholderInner.setAttribute('class', 'number-input-inner');
+      numberPlaceholderInner.style.width = `${placeholderSize}px`;
+      numberPlaceholderInner.style.height = `${placeholderSize}px`;
+      numberPlaceholderInner.style.fontSize = `${placeholderSize - 10}px`;
+      numberPlaceholder.appendChild(numberPlaceholderInner);
+      placeholderParent.appendChild(numberPlaceholder);
+    }
+
+    setTimeout(() => {
+      let inputs = document.getElementsByClassName('number-input-inner');
+      for (let i = 0; i < inputs.length; i++)
+      {
+        let rect = inputs[i].getBoundingClientRect();
+        placeholderPosList.push([rect.x, rect.x + rect.width, rect.y, rect.y + rect.height, inputs[i]]);
+      }
+    }, 1000);
+  }
+
+  createPlaceholders();
+})();
+</script>
+<style>
+  :root {
+    --font-size: 24px;
+  }
+  * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  #button-drop {
+    font-size: 24px;
+    z-index: 99;
+    margin: auto;
+    margin-top: 5vh;
+  }
+  .fullscreen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+  }
+  .flex-container {
+    display: flex;
+  }
+  .flex-container > * {
+    margin: auto;
+  }
+  .movable {
+    position: absolute;
+    font-size: var(--font-size);
+    cursor: pointer;
+  }
+  .number-label {
+    margin-top: 10vh;
+    font-size: 24px;
+    text-align: center;
+  }
+  .number-label p {
+    margin: auto;
+  }
+  #number-placeholder {
+    display: flex;
+    width: 70vw;
+    margin: auto;
+    margin-top: 10vh;
+  }
+  .number-input {
+    margin: auto;
+  }
+  .number-input-inner {
+    border: 5px solid black;
+    cursor: pointer;
+    text-align: center;
+  }
+</style>
+</html>
